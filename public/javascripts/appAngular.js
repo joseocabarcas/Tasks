@@ -1,4 +1,4 @@
-angular.module('appTareas', ['ui.router'])
+angular.module('appTareas', ['ui.router','ngResource'])
     .config(function($stateProvider, $urlRouterProvider) {
         $stateProvider
             .state('alta', {
@@ -14,39 +14,77 @@ angular.module('appTareas', ['ui.router'])
 
         $urlRouterProvider.otherwise('alta');
     })
-    .factory('comun', function() {
+    .factory('Tareas', function($resource){
+        return $resource('/tareas/:id', { id: '@_id' }, {
+            update: {
+              method: 'PUT',
+              url:'/tarea/:id'
+            },
+            save:{
+                url:'/tarea',
+                method:'POST',
+                isArray:false
+            },
+            get:{
+                url:'/tarea/:id',
+                method:'GET',
+                isArray:false
+            },
+            delete:{
+                url:'/tarea/:id',
+                method:'DELETE'
+            }
+        }
+        );
+    })
+    .factory('comun', function(Tareas) {
         var comun = {}
 
-        comun.tareas = [{
-            nombre: 'Comprar comida',
-            prioridad: '1'
-        }, {
-            nombre: 'Pasear al perro',
-            prioridad: '2'
-        }, {
-            nombre: 'Ir al cine',
-            prioridad: '0'
-        }]
-
+        comun.tareas = [];
         comun.tarea = {};
 
-        comun.eliminar = function(tarea) {
-            var indice = comun.tareas.indexOf(tarea);
-            comun.tareas.splice(indice, 1);
+    
+        //Metodos remotos
+        comun.getAll = function(){
+            return Tareas.query(function(tareas) {
+                    angular.copy(tareas,comun.tareas);
+                    //comun.tareas= tareas;
+                    return comun.tareas;
+                });
+        }
+
+        comun.add = function(tarea){
+            return Tareas.save(tarea, function(tarea) {
+                comun.tareas.push(tarea);
+                //comun.tarea = tarea;
+                //return comun.tarea;
+            });
+        }
+
+        comun.update = function (tarea) {
+            return Tareas.update({ id: tarea._id}, tarea);
+        }
+
+        comun.delete = function (tarea) {
+            return Tareas.delete({ id: tarea._id}, function () {
+                var indice = comun.tareas.indexOf(tarea);
+                comun.tareas.splice(indice, 1);
+            });
         }
 
         return comun;
     })
-    .controller('ctrlAlta', function($scope, $state, comun) {
+    .controller('ctrlAlta', function($scope, $state, comun ) {
         $scope.tarea = {}
             // $scope.tareas = [];
 
-        $scope.tareas = comun.tareas;
+        comun.getAll();
 
+        $scope.tareas = comun.tareas;
         $scope.prioridades = ['Baja', 'Normal', 'Alta'];
 
         $scope.agregar = function() {
-            $scope.tareas.push({
+            comun.add({
                 nombre: $scope.tarea.nombre,
                 prioridad: parseInt($scope.tarea.prioridad)
             })
@@ -64,7 +102,7 @@ angular.module('appTareas', ['ui.router'])
         }
 
         $scope.eliminar = function(tarea) {
-            comun.eliminar(tarea)
+            comun.delete(tarea)
         }
 
         $scope.procesaObjeto = function(tarea) {
@@ -77,13 +115,12 @@ angular.module('appTareas', ['ui.router'])
         $scope.tarea = comun.tarea;
 
         $scope.actualizar = function() {
-            var indice = comun.tareas.indexOf(comun.tarea);
-            comun.tareas[indice] = $scope.tarea;
+            comun.update($scope.tarea);
             $state.go('alta');
         }
 
         $scope.eliminar = function(){
-            comun.eliminar($scope.tarea);
+            comun.delete($scope.tarea);
             $state.go('alta');
         }
     })
